@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DannyTrades — Market Intelligence Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0b0d;
+  --surface: #111318;
+  --surface-2: #181b22;
+  --border: #1f2430;
+  --text: #e2e4e9;
+  --text-dim: #6b7280;
+  --green: #22c55e;
+  --green-dim: rgba(34, 197, 94, 0.12);
+  --red: #ef4444;
+  --red-dim: rgba(239, 68, 68, 0.1);
+  --yellow: #eab308;
+  --yellow-dim: rgba(234, 179, 8, 0.1);
+  --blue: #3b82f6;
+  --blue-dim: rgba(59, 130, 246, 0.1);
+  --cyan: #06b6d4;
+  --purple: #a855f7;
+  --orange: #f97316;
+  --accent: #22c55e;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.grain {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+.dashboard {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 48px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.header h1 {
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  background: linear-gradient(135deg, #22c55e, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.header .date {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: right;
+}
+.header .date span {
+  display: block;
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* Stat Cards Row */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+.stat-card.green::before { background: var(--green); }
+.stat-card.red::before { background: var(--red); }
+.stat-card.yellow::before { background: var(--yellow); }
+.stat-card.blue::before { background: var(--blue); }
+.stat-card.purple::before { background: var(--purple); }
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+.stat-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Section Titles */
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-title .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Two Column Layout */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+/* Whale Accumulation Chart */
+.whale-chart {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+.bar-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+.bar-ticker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  width: 48px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.bar-track {
+  flex: 1;
+  height: 22px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+.bar-fill.high { background: linear-gradient(90deg, #166534, #22c55e); }
+.bar-fill.mid { background: linear-gradient(90deg, #854d0e, #eab308); }
+.bar-fill.low { background: linear-gradient(90deg, #991b1b, #ef4444); }
+.bar-fill.rising::after {
+  content: '\u25B2';
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  color: #86efac;
+}
+.bar-fill.falling::after {
+  content: '\u25BC';
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  color: #fca5a5;
+}
+.bar-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  width: 48px;
+  flex-shrink: 0;
+}
+
+/* Ticker Cards */
+.ticker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.ticker-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color 0.2s;
+}
+.ticker-card:hover {
+  border-color: var(--accent);
+}
+.ticker-card .top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.ticker-card .symbol {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 700;
+}
+.ticker-card .price {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+.ticker-card .signal-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+.badge-red { background: var(--green-dim); color: var(--green); }
+.badge-yellow { background: var(--yellow-dim); color: var(--yellow); }
+.badge-golden { background: rgba(234, 179, 8, 0.15); color: #fbbf24; border: 1px solid rgba(234, 179, 8, 0.3); }
+.badge-bearish { background: var(--red-dim); color: var(--red); }
+
+.mini-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 40px;
+  margin: 12px 0;
+}
+.mini-bar {
+  flex: 1;
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  transition: height 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ticker-card .meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-dim);
+}
+.ticker-card .meta .whale {
+  color: var(--green);
+}
+.ticker-card .meta .whale.low {
+  color: var(--red);
+}
+
+/* Signal Table */
+.signal-table {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.signal-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.signal-table th {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  padding: 14px 16px;
+  text-align: left;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.signal-table td {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.signal-table tr:last-child td { border-bottom: none; }
+.signal-table tr:hover { background: rgba(255,255,255,0.02); }
+
+/* Buy Orders */
+.buy-orders {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+.buy-order {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.buy-order:last-child { border-bottom: none; }
+.buy-order .ticker-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 16px;
+}
+.buy-order .range {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--green);
+}
+.buy-order .type {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Bearish Panel */
+.bearish-panel {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), transparent);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: 12px;
+  padding: 24px;
+}
+.bearish-item {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.08);
+}
+.bearish-item:last-child { border-bottom: none; }
+.bearish-item .name {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: var(--red);
+}
+.bearish-item .reason {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* Sector Heatmap */
+.heatmap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 4px;
+  margin-bottom: 32px;
+}
+.heat-cell {
+  aspect-ratio: 1.6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  transition: transform 0.2s;
+  cursor: default;
+}
+.heat-cell:hover { transform: scale(1.05); }
+.heat-cell .ht { font-size: 13px; font-weight: 700; }
+.heat-cell .hv { font-size: 10px; opacity: 0.8; }
+
+/* Performance Sparkline */
+.perf-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 80px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+.perf-row:last-child { border-bottom: none; }
+.perf-change.pos { color: var(--green); }
+.perf-change.neg { color: var(--red); }
+.perf-dots {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.perf-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Legend */
+.legend {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-dim);
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-dot {
+  width: 10px; height: 10px;
+  border-radius: 2px;
+}
+
+/* Timeline */
+.timeline {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 32px;
+}
+.tl-day {
+  margin-bottom: 20px;
+}
+.tl-day:last-child { margin-bottom: 0; }
+.tl-date {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cyan);
+  margin-bottom: 8px;
+}
+.tl-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.tl-bar-track {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.tl-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  border-radius: 3px;
+  transition: width 1s ease;
+}
+
+/* Animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate {
+  animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="dashboard">
+
+<!-- Header -->
+<div class="header animate" style="animation-delay: 0.05s">
+  <div>
+    <h1>DannyTrades Intelligence</h1>
+    <div style="font-size: 13px; color: var(--text-dim); margin-top: 4px;">Patreon Market Analysis &mdash; Weekly Dashboard</div>
+  </div>
+  <div class="date">
+    <span>April 5 &ndash; 11, 2026</span>
+    80 posts processed &bull; 51 tickers tracked
+  </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="stat-row animate" style="animation-delay: 0.1s">
+  <div class="stat-card green">
+    <div class="stat-label">Tickers &gt;90% Whale</div>
+    <div class="stat-value" style="color: var(--green)">20</div>
+    <div class="stat-sub">Highest conviction zone</div>
+  </div>
+  <div class="stat-card blue">
+    <div class="stat-label">Golden Crosses</div>
+    <div class="stat-value" style="color: var(--blue)">9</div>
+    <div class="stat-sub">MACD crossover signals</div>
+  </div>
+  <div class="stat-card red">
+    <div class="stat-label">New Weekly Reds</div>
+    <div class="stat-value" style="color: var(--green)">12</div>
+    <div class="stat-sub">Bullish candles Apr 11</div>
+  </div>
+  <div class="stat-card yellow">
+    <div class="stat-label">Yellow Candles</div>
+    <div class="stat-value" style="color: var(--yellow)">5</div>
+    <div class="stat-sub">Bearish / sell signals</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="stat-label">Rising Whale Accum</div>
+    <div class="stat-value" style="color: var(--purple)">13</div>
+    <div class="stat-sub">Week-over-week increase</div>
+  </div>
+</div>
+
+<!-- Heatmap -->
+<div class="section-title animate" style="animation-delay: 0.15s">
+  <div class="dot"></div>
+  Whale Accumulation Heatmap &mdash; Latest Reading
+</div>
+<div class="legend animate" style="animation-delay: 0.17s">
+  <div class="legend-item"><div class="legend-dot" style="background: #166534"></div> &gt;90%</div>
+  <div class="legend-item"><div class="legend-dot" style="background: #854d0e"></div> 40-90%</div>
+  <div class="legend-item"><div class="legend-dot" style="background: #991b1b"></div> &lt;40%</div>
+  <div class="legend-item"><div class="legend-dot" style="background: #1e1b4b"></div> Invisible</div>
+</div>
+<div class="heatmap animate" style="animation-delay: 0.2s" id="heatmap"></div>
+
+<!-- Two Column: Whale Chart + Top Movers -->
+<div class="grid-2 animate" style="animation-delay: 0.25s">
+  <div>
+    <div class="section-title">
+      <div class="dot" style="background: var(--cyan)"></div>
+      Whale Accumulation Rankings
+    </div>
+    <div class="whale-chart" id="whaleChart"></div>
+  </div>
+  <div>
+    <div class="section-title">
+      <div class="dot" style="background: var(--orange)"></div>
+      Biggest Whale Accumulation Movers
+    </div>
+    <div class="whale-chart" id="moversChart">
+      <div id="moversContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Core Positions -->
+<div class="section-title animate" style="animation-delay: 0.3s">
+  <div class="dot" style="background: var(--purple)"></div>
+  Core Positions &mdash; Week at a Glance
+</div>
+<div class="ticker-grid animate" style="animation-delay: 0.35s" id="coreCards"></div>
+
+<!-- Golden Crosses + Buy Orders + Bearish -->
+<div class="grid-3 animate" style="animation-delay: 0.4s">
+  <div>
+    <div class="section-title">
+      <div class="dot" style="background: var(--yellow)"></div>
+      Golden Cross Signals
+    </div>
+    <div class="signal-table">
+      <table>
+        <thead><tr><th>Ticker</th><th>Whale%</th><th>Status</th></tr></thead>
+        <tbody id="goldenTable"></tbody>
+      </table>
+    </div>
+  </div>
+  <div>
+    <div class="section-title">
+      <div class="dot" style="background: var(--green)"></div>
+      Danny's Buy Orders
+    </div>
+    <div class="buy-orders" id="buyOrders"></div>
+  </div>
+  <div>
+    <div class="section-title">
+      <div class="dot" style="background: var(--red)"></div>
+      Bearish Watchlist
+    </div>
+    <div class="bearish-panel" id="bearishPanel"></div>
+  </div>
+</div>
+
+<!-- Post Activity Timeline -->
+<div class="section-title animate" style="animation-delay: 0.45s">
+  <div class="dot" style="background: var(--cyan)"></div>
+  Post Activity Timeline
+</div>
+<div class="timeline animate" style="animation-delay: 0.5s" id="timeline"></div>
+
+<!-- Sector Breakdown -->
+<div class="section-title animate" style="animation-delay: 0.55s">
+  <div class="dot" style="background: var(--green)"></div>
+  Sector Performance &mdash; Average Whale Accumulation
+</div>
+<div class="whale-chart animate" style="animation-delay: 0.6s; margin-bottom: 32px;" id="sectorChart"></div>
+
+<!-- Footer -->
+<div style="text-align: center; padding: 32px 0; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text-dim); border-top: 1px solid var(--border); margin-top: 32px;">
+  Data extracted from DannyTrades Patreon &bull; April 5-11, 2026 &bull; 80 posts &bull; 51 tickers<br>
+  Red candle = bullish signal &bull; Yellow candle = bearish signal &bull; Whale accumulation = smart money positioning
+</div>
+
+</div>
+
+<script>
+// ===== DATA =====
+const tickers = [
+  { t: 'SNDK', s: 'Semi', w: 98.98, c: 851.57, sig: 'red', trend: 'rising', from: 86.1 },
+  { t: 'WULF', s: 'DataCtr', w: 98.9, c: 18.87, sig: 'golden', trend: 'rising', from: 97.2 },
+  { t: 'HUT', s: 'DataCtr', w: 98.88, c: 66.09, sig: 'red', trend: 'rising', from: 91.99 },
+  { t: 'CIEN', s: 'Photon', w: 97.8, c: 487.38, sig: 'red', trend: 'steady' },
+  { t: 'LITE', s: 'Photon', w: 97.4, c: 894.13, sig: 'red', trend: 'rising', from: 91.4 },
+  { t: 'INTC', s: 'Semi', w: 98.11, c: 58.95, sig: 'red', trend: 'rising', from: 97.6 },
+  { t: 'NBIS', s: 'AI', w: 98.72, c: 136.33, sig: 'golden', trend: 'rising', from: 95.8 },
+  { t: 'AVGO', s: 'Semi', w: 96.56, c: 371.55, sig: 'red', trend: 'rising', from: 71.44 },
+  { t: 'TSM', s: 'Semi', w: 96.8, c: 370.60, sig: 'red', trend: 'steady' },
+  { t: 'TSEM', s: 'Semi', w: 96.2, c: 203.82, sig: 'red', trend: 'steady' },
+  { t: 'AAOI', s: 'Photon', w: 95.9, c: 133.30, sig: 'golden', trend: 'rising', from: 87.08 },
+  { t: 'AEHR', s: 'Semi', w: 95.3, c: 68.86, sig: 'red', trend: 'rising', from: 92.7 },
+  { t: 'LUNR', s: 'Space', w: 95.3, c: 23.57, sig: 'red', trend: 'mixed' },
+  { t: 'COHR', s: 'Photon', w: 94.8, c: 284.17, sig: 'golden', trend: 'rising', from: 62.3 },
+  { t: 'SATL', s: 'Space', w: 94.55, c: 7.33, sig: 'red', trend: 'steady' },
+  { t: 'AMD', s: 'Semi', w: 94.5, c: 245.04, sig: 'golden', trend: 'rising', from: 47.62 },
+  { t: 'MRVL', s: 'Semi', w: 98.4, c: 114.45, sig: 'red', trend: 'steady' },
+  { t: 'SPIR', s: 'Space', w: 92.11, c: 21.56, sig: 'red', trend: 'mixed' },
+  { t: 'NVDA', s: 'Semi', w: 89.09, c: 188.63, sig: 'golden', trend: 'rising', from: 5.38 },
+  { t: 'GOOGL', s: 'BigTech', w: 86.7, c: 317.24, sig: 'red', trend: 'rising', from: 43.4 },
+  { t: 'AMZN', s: 'BigTech', w: 85.6, c: 238.38, sig: 'red', trend: 'n/a' },
+  { t: 'AMPX', s: 'Energy', w: 83.2, c: 17.56, sig: 'red', trend: 'n/a' },
+  { t: 'AAPL', s: 'BigTech', w: 77.6, c: 260.48, sig: 'red', trend: 'n/a' },
+  { t: 'SIDU', s: 'Space', w: 75.6, c: 4.25, sig: 'red', trend: 'mixed' },
+  { t: 'FLY', s: 'Special', w: 75.11, c: 32.93, sig: 'red', trend: 'n/a' },
+  { t: 'CIFR', s: 'DataCtr', w: 74.2, c: 16.53, sig: 'golden', trend: 'rising', from: 36.3 },
+  { t: 'MU', s: 'Semi', w: 71.6, c: 421.51, sig: 'golden', trend: 'rising', from: 47.6 },
+  { t: 'PLTR', s: 'AI', w: 58.25, c: 128.06, sig: 'yellow', trend: 'falling', from: 24.9 },
+  { t: 'IBRX', s: 'Biotech', w: 58.7, c: 7.48, sig: 'red', trend: 'mixed' },
+  { t: 'ASTS', s: 'Space', w: 54.6, c: 91.61, sig: 'red', trend: 'falling', from: 63.2 },
+  { t: 'META', s: 'BigTech', w: 48.25, c: 629.86, sig: 'red', trend: 'n/a' },
+  { t: 'OSCR', s: 'Health', w: 43.72, c: 14.54, sig: 'red', trend: 'steady' },
+  { t: 'ONDS', s: 'Semi', w: 40.4, c: 9.52, sig: 'red', trend: 'n/a' },
+  { t: 'IREN', s: 'DataCtr', w: 39.32, c: 39.32, sig: 'red', trend: 'rising', from: 7 },
+  { t: 'NAK', s: 'Mining', w: 36.13, c: 1.62, sig: 'red', trend: 'n/a' },
+  { t: 'HIMS', s: 'Health', w: 27.7, c: 20.33, sig: 'red', trend: 'n/a' },
+  { t: 'RKLB', s: 'Space', w: 26.6, c: 66.74, sig: 'red', trend: 'falling', from: 31.2 },
+  { t: 'COIN', s: 'Crypto', w: 21.22, c: 175.18, sig: 'red', trend: 'steady' },
+  { t: 'NU', s: 'Fintech', w: 16.6, c: 14.87, sig: 'red', trend: 'rising', from: 2.2 },
+  { t: 'LMND', s: 'Insur', w: 9.2, c: 55.63, sig: 'yellow', trend: 'falling', from: 15.48 },
+  { t: 'ZETA', s: 'Software', w: 3.07, c: 15.32, sig: 'yellow', trend: 'falling', from: 6.16 },
+  { t: 'SOFI', s: 'Fintech', w: 2.81, c: 16.27, sig: 'red', trend: 'mixed' },
+  { t: 'MSFT', s: 'BigTech', w: 2.9, c: 370.87, sig: 'red', trend: 'steady' },
+  { t: 'HOOD', s: 'Fintech', w: 2.01, c: 70.12, sig: 'red', trend: 'steady' },
+  { t: 'TMC', s: 'Mining', w: 2.3, c: 4.42, sig: 'red', trend: 'falling', from: 3.67 },
+  { t: 'SHOP', s: 'Ecomm', w: 0.5, c: 112.38, sig: 'yellow', trend: 'falling', from: 13.6 },
+  { t: 'TSLA', s: 'EV', w: 0.1, c: 345.62, sig: 'bearish', trend: 'falling' },
+];
+
+const corePositions = [
+  { t: 'AMD', prices: [220.18, 221.53, 231.82, 236.64, 245.04], whales: [47.62, 53.55, 75.6, 77.7, 94.5], days: ['Apr 7','Apr 8','Apr 9','Apr 10','Apr 11'], change: '+11.3%', sig: 'golden', note: 'Whale accum surged 47%→94.5%' },
+  { t: 'PLTR', prices: [147.93, 150.07, 140.76, 130.49, 128.06], whales: [23.17, 24.9, 15.72, 0.5, 58.25], days: ['Apr 7','Apr 8','Apr 9','Apr 10','Apr 11'], change: '-13.4%', sig: 'yellow', note: 'Yellow candle, buy order $123-127.50' },
+  { t: 'NVDA', prices: [177.64, 178.10, 182.08, 183.91, 188.63], whales: [5.38, 6.73, 14.8, 24.16, 89.09], days: ['Apr 7','Apr 8','Apr 9','Apr 10','Apr 11'], change: '+6.2%', sig: 'golden', note: 'Bottoming confirmed, MACD golden cross' },
+  { t: 'TSLA', prices: [352.82, 346.65, 343.25, null, 345.62], whales: [0.1, 0.1, 0.1, 0.1, 0.1], days: ['Apr 7','Apr 8','Apr 9','Apr 10','Apr 11'], change: '-2.0%', sig: 'bearish', note: 'Descending blue ribbon, invisible whales' },
+  { t: 'GOOGL', prices: [null, null, null, 318.49, 317.24], whales: [null, null, null, 43.4, 86.7], days: ['Apr 7','Apr 8','Apr 9','Apr 10','Apr 11'], change: '-0.4%', sig: 'red', note: "Danny's top Mag 7 pick" },
+  { t: 'INTC', prices: [null, 52.91, 58.95, null, null], whales: [null, 94.4, 98.11, null, null], days: ['Apr 7','Apr 8','Apr 9','Apr 10','Apr 11'], change: '+11.4%', sig: 'red', note: 'Triple red candles, 94-98% whale' },
+];
+
+const goldenCrosses = [
+  { t: 'AMD', w: '94.5%', s: 'Forming on weekly' },
+  { t: 'NVDA', w: '89.09%', s: 'Confirmed Apr 7' },
+  { t: 'WULF', w: '98.9%', s: 'Golden cross forming' },
+  { t: 'MU', w: '71.6%', s: 'Daily golden cross' },
+  { t: 'AAOI', w: '95.9%', s: 'Daily golden cross' },
+  { t: 'COHR', w: '94.8%', s: 'Daily golden cross' },
+  { t: 'NBIS', w: '98.72%', s: 'Golden cross signal' },
+  { t: 'CIFR', w: '74.2%', s: 'Golden cross forming' },
+  { t: 'TMC', w: '2.3%', s: 'Daily golden cross' },
+];
+
+const buyOrders = [
+  { t: 'PLTR', range: '$123 - $127.50', type: 'Active buy order (Apr 10)' },
+  { t: 'SIDU', range: '$3.50 - $3.70', type: 'Active buy order (Apr 10)' },
+  { t: 'NVDA', range: '$148 - $152', type: 'DCA zone (strategic)' },
+  { t: 'AMD', range: '$160 - $180', type: 'DCA zone (strategic)' },
+  { t: 'PLTR', range: '$100 - $120', type: 'Deep DCA zone' },
+];
+
+const bearish = [
+  { t: 'TSLA', r: 'Descending blue ribbon, invisible whale accum, lower highs/lows' },
+  { t: 'PLTR', r: 'Yellow candle weekly, head & shoulders, collapsed to $128' },
+  { t: 'SHOP', r: 'New yellow candle, whale accum dropped to invisible' },
+  { t: 'LMND', r: 'Yellow candle + volatility hole, whale accum falling (9.2%)' },
+  { t: 'ZETA', r: 'New yellow candle, whale accum only 3.07%' },
+  { t: 'MSFT', r: 'Whale accum only 2.9%, descending blue ribbons' },
+];
+
+const postCounts = [
+  { day: 'Apr 5 (Sat)', count: 10 },
+  { day: 'Apr 6 (Sun)', count: 6 },
+  { day: 'Apr 7 (Mon)', count: 12 },
+  { day: 'Apr 8 (Tue)', count: 13 },
+  { day: 'Apr 9 (Wed)', count: 15 },
+  { day: 'Apr 10 (Thu)', count: 16 },
+  { day: 'Apr 11 (Fri)', count: 9 },
+];
+
+const sectors = [
+  { name: 'Photonics', avg: 96.5, tickers: 'AAOI, LITE, COHR, CIEN' },
+  { name: 'Data Centers', avg: 77.8, tickers: 'IREN, CIFR, HUT, WULF' },
+  { name: 'Space', avg: 72.7, tickers: 'SATL, SIDU, LUNR, SPIR, ASTS, RKLB' },
+  { name: 'Semiconductors', avg: 83.2, tickers: 'AVGO, TSM, INTC, MRVL, MU, AMD, NVDA' },
+  { name: 'Big Tech', avg: 60.2, tickers: 'AAPL, AMZN, GOOGL, META, MSFT' },
+  { name: 'Fintech', avg: 7.1, tickers: 'SOFI, HOOD, NU' },
+  { name: 'AI / Software', avg: 78.5, tickers: 'PLTR, NBIS' },
+];
+
+// ===== RENDER FUNCTIONS =====
+
+function getHeatColor(w) {
+  if (w >= 90) return 'rgba(34, 197, 94, 0.35)';
+  if (w >= 70) return 'rgba(34, 197, 94, 0.2)';
+  if (w >= 40) return 'rgba(234, 179, 8, 0.2)';
+  if (w >= 15) return 'rgba(239, 68, 68, 0.15)';
+  return 'rgba(99, 102, 241, 0.12)';
+}
+
+function getHeatText(w) {
+  if (w >= 90) return '#86efac';
+  if (w >= 70) return '#4ade80';
+  if (w >= 40) return '#fbbf24';
+  if (w >= 15) return '#fca5a5';
+  return '#818cf8';
+}
+
+// Heatmap
+const heatmapEl = document.getElementById('heatmap');
+tickers.forEach(t => {
+  const cell = document.createElement('div');
+  cell.className = 'heat-cell';
+  cell.style.background = getHeatColor(t.w);
+  cell.innerHTML = `<div class="ht" style="color:${getHeatText(t.w)}">${t.t}</div><div class="hv" style="color:${getHeatText(t.w)}">${t.w}%</div>`;
+  heatmapEl.appendChild(cell);
+});
+
+// Whale Chart (top 20)
+const whaleChartEl = document.getElementById('whaleChart');
+const top20 = tickers.slice(0, 20);
+top20.forEach(t => {
+  const cls = t.w >= 90 ? 'high' : t.w >= 40 ? 'mid' : 'low';
+  const trendCls = t.trend === 'rising' ? ' rising' : t.trend === 'falling' ? ' falling' : '';
+  const row = document.createElement('div');
+  row.className = 'bar-row';
+  row.innerHTML = `
+    <div class="bar-ticker">${t.t}</div>
+    <div class="bar-track"><div class="bar-fill ${cls}${trendCls}" style="width:${t.w}%"></div></div>
+    <div class="bar-value">${t.w}%</div>
+  `;
+  whaleChartEl.appendChild(row);
+});
+
+// Movers Chart
+const moversEl = document.getElementById('moversContent');
+const movers = tickers.filter(t => t.from !== undefined && t.trend === 'rising').sort((a,b) => (b.w - b.from) - (a.w - a.from)).slice(0, 10);
+movers.forEach(t => {
+  const delta = (t.w - t.from).toFixed(1);
+  const row = document.createElement('div');
+  row.className = 'bar-row';
+  row.innerHTML = `
+    <div class="bar-ticker">${t.t}</div>
+    <div class="bar-track">
+      <div class="bar-fill high" style="width:${Math.min((t.w - t.from), 100)}%; background: linear-gradient(90deg, #0e7490, #06b6d4);"></div>
+    </div>
+    <div class="bar-value" style="color: var(--cyan);">+${delta}%</div>
+  `;
+  moversEl.appendChild(row);
+});
+
+// Core Position Cards
+const coreEl = document.getElementById('coreCards');
+corePositions.forEach(pos => {
+  const card = document.createElement('div');
+  card.className = 'ticker-card';
+  const isPos = pos.change.startsWith('+');
+  const sigClass = pos.sig === 'yellow' ? 'badge-yellow' : pos.sig === 'golden' ? 'badge-golden' : pos.sig === 'bearish' ? 'badge-bearish' : 'badge-red';
+  const sigLabel = pos.sig === 'yellow' ? 'YELLOW CANDLE' : pos.sig === 'golden' ? 'GOLDEN CROSS' : pos.sig === 'bearish' ? 'BEARISH' : 'RED CANDLE';
+
+  // Mini chart from prices
+  const validPrices = pos.prices.filter(p => p !== null);
+  const minP = Math.min(...validPrices);
+  const maxP = Math.max(...validPrices);
+  const range = maxP - minP || 1;
+
+  let miniHtml = '<div class="mini-chart">';
+  pos.prices.forEach(p => {
+    if (p === null) {
+      miniHtml += `<div class="mini-bar" style="height:2px;background:var(--surface-2)"></div>`;
+    } else {
+      const pct = ((p - minP) / range) * 100;
+      const h = Math.max(8, pct * 0.35 + 5);
+      const color = isPos ? 'var(--green)' : pos.sig === 'bearish' ? 'var(--red)' : 'var(--yellow)';
+      miniHtml += `<div class="mini-bar" style="height:${h}px;background:${color}"></div>`;
+    }
+  });
+  miniHtml += '</div>';
+
+  // Whale mini chart
+  let whaleHtml = '<div class="mini-chart" style="height:24px;opacity:0.6">';
+  pos.whales.forEach(w => {
+    if (w === null) {
+      whaleHtml += `<div class="mini-bar" style="height:2px;background:var(--surface-2)"></div>`;
+    } else {
+      const h = Math.max(2, w * 0.22);
+      whaleHtml += `<div class="mini-bar" style="height:${h}px;background:var(--cyan);opacity:0.7"></div>`;
+    }
+  });
+  whaleHtml += '</div>';
+
+  const latestPrice = validPrices[validPrices.length - 1];
+
+  card.innerHTML = `
+    <div class="top">
+      <div class="symbol">${pos.t}</div>
+      <span class="signal-badge ${sigClass}">${sigLabel}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <div class="price">$${latestPrice.toFixed(2)}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:${isPos ? 'var(--green)' : 'var(--red)'}">${pos.change}</div>
+    </div>
+    ${miniHtml}
+    <div style="font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--text-dim);margin-bottom:4px">WHALE ACCUMULATION</div>
+    ${whaleHtml}
+    <div class="meta" style="margin-top:8px">
+      <span>${pos.note}</span>
+    </div>
+  `;
+  coreEl.appendChild(card);
+});
+
+// Golden Crosses Table
+const goldenEl = document.getElementById('goldenTable');
+goldenCrosses.forEach(g => {
+  goldenEl.innerHTML += `<tr><td style="font-weight:700;color:var(--yellow)">${g.t}</td><td>${g.w}</td><td style="color:var(--text-dim)">${g.s}</td></tr>`;
+});
+
+// Buy Orders
+const buyEl = document.getElementById('buyOrders');
+buyOrders.forEach(b => {
+  buyEl.innerHTML += `<div class="buy-order"><div><div class="ticker-name">${b.t}</div><div class="type">${b.type}</div></div><div class="range">${b.range}</div></div>`;
+});
+
+// Bearish Panel
+const bearishEl = document.getElementById('bearishPanel');
+bearish.forEach(b => {
+  bearishEl.innerHTML += `<div class="bearish-item"><div class="name">${b.t}</div><div class="reason">${b.r}</div></div>`;
+});
+
+// Timeline
+const timelineEl = document.getElementById('timeline');
+const maxCount = Math.max(...postCounts.map(p => p.count));
+postCounts.reverse().forEach(p => {
+  timelineEl.innerHTML += `
+    <div class="tl-day">
+      <div class="tl-date">${p.day} <span class="tl-count">&mdash; ${p.count} posts</span></div>
+      <div class="tl-bar-track"><div class="tl-bar-fill" style="width:${(p.count/maxCount)*100}%"></div></div>
+    </div>
+  `;
+});
+
+// Sector Chart
+const sectorEl = document.getElementById('sectorChart');
+sectors.sort((a,b) => b.avg - a.avg).forEach(s => {
+  const cls = s.avg >= 70 ? 'high' : s.avg >= 40 ? 'mid' : 'low';
+  sectorEl.innerHTML += `
+    <div class="bar-row">
+      <div class="bar-ticker" style="width:90px;font-size:10px">${s.name}</div>
+      <div class="bar-track"><div class="bar-fill ${cls}" style="width:${s.avg}%"></div></div>
+      <div class="bar-value">${s.avg}%</div>
+    </div>
+  `;
+});
+</script>
+</body>
+</html>
