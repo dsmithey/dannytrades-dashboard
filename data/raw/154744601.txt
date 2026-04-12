@@ -1,0 +1,98 @@
+DannyTrades
+
+Home
+
+Posts
+
+Collections
+
+Shop
+
+Membership
+
+Recommendations
+
+Gift
+Weekly Insights Part 2: S&P 500 and the Daily Sentiment Index (DSI) (April 6, 2026)
+DannyTrades
+
+5 days ago
+
+New
+37
+
+What is the Daily Sentiment Index (DSI)?
+
+The DSI measures the percentage of small/retail traders who are bullish on the S&P 500 (via futures sentiment surveys). Jake Bernstein has published this since 1987 as a contrary opinion tool:
+
+Extreme high DSI (e.g., 85â€“90%+ bullish) â†’ Often signals short-term tops or corrections (crowd is too optimistic, potential selling pressure).
+
+Extreme low DSI (e.g., 10â€“20% or lower bullish) â†’ Often signals short-term bottoms or rebounds (crowd is too fearful/pessimistic, potential buying opportunity as fear washes out weak hands).
+
+It works best at extremes for timing swings, not as a trend-following indicator. The middle range (~40â€“70) is less actionable.
+
+This is a classic "fear is a bad investment advisor" setup â€” the chart's source even references that idea.
+
+Overall Market Context from the Chart
+
+S&P 500 trend: Strong multi-year uptrend from ~2023 lows, with steady gains through 2024â€“early 2025, some volatility/pullbacks, and a peak near the right side (late 2025/early 2026). The index ends slightly off its highs but remains elevated overall.
+
+DSI behavior: Highly volatile, swinging between 15 (extreme fear) and 90 (extreme greed). It frequently drops to lows around major S&P dips and spikes during rallies.
+
+Key Observations from the Orange Circles
+
+The S&P 500 has shown a strong secular uptrend since 2023, with steady gains through 2024â€“2025, occasional pullbacks, and a peak near the right side of the chart before a modest retreat.At each orange circle, low DSI readings (extreme fear) aligned closely with short-term price dips:
+
+Early 2023, mid-2023, late 2023/early 2024, mid-2024, and early 2025 â€” each time sentiment plunged to low teens or near 15â€“25%, the market found support and resumed its broader upward path.
+
+These fear spikes consistently preceded recoveries or continuation of the uptrend.
+
+The most recent circle (late 2025/early 2026) shows DSI crashing to 15 â€” one of the lowest levels in the entire period â€” coinciding with the S&P 500 pulling back from its highs.
+
+Pattern summary: Low DSI readings (circled) repeatedly occur near or just after short-term S&P dips/pullbacks, often preceding recoveries or continuation of the broader uptrend. High DSI (not as prominently circled but visible in swings) tends to precede or coincide with tops/corrections.
+
+Current Situation (as of the chart's end ~early 2026)
+
+DSI has plunged to 15 â€” one of the lowest readings in the period (matching or lower than previous fear spikes).
+
+This suggests extreme bearish sentiment among small traders right now.
+
+Per Bernstein's framework, this is often a contrarian bullish signal for a short-term bottom or relief rally (fear is overdone; weak hands may have sold).
+
+The S&P is coming off highs with some downward pressure, but the broader trend remains upward over the multi-year view.
+
+Recent market context aligns: In early 2026, the S&P 500 has been trading in the 6,300â€“7,000 range with volatility, and DSI hitting lows like 15 has been noted as "stretched" fear.
+
+Current Takeaway (as of early April 2026)
+
+The S&P 500 remains in a long-term uptrend despite recent volatility and a modest YTD pullback. The latest plunge in DSI to extreme lows suggests that retail fear has once again become stretched. Historically, such readings have marked contrarian opportunities for short-term bounces or better entry points, especially within a secular bull market. When small traders become overwhelmingly pessimistic near price dips, it has often washed out weak hands and set the stage for rebounds.
+
+Important Caveats
+
+The DSI is most useful for short-term swing timing (days to weeks), not for calling the long-term direction.
+
+Sentiment can remain extreme longer than expected, and it works best when combined with price action, volume, moving averages, and broader macro factors.
+
+Always use proper risk management â€” no single indicator is foolproof.
+
+Bottom line: Extreme fear, as reflected in the current DSI reading of 15, has been a recurring signal for potential opportunistic zones in this bull market. Staying disciplined and avoiding emotional decisions remains key.
+
+In collection
+Weekly Insights and Strategies
+67 posts
+
+Comments are disabled for this post.
+
+Get more out of every post with the app.
+Open app
+Related posts
+Weekly Insights Part 1: S&P 500 Bull and Bear Markets: The Stairs vs. The Elevator (April 6, 2026)
+The famous market saying goes: â€œMarkets take the stairs up and the elevator down.â€? This chart from Charlie Bilello proves it beyond any doub
+
+5 days ago
+
+52
+
+6
+MUST-READ: A Look at Bullish Data Centers (2 New Red Candles): $IREN, $CIFR, $HUT (April 11, 2026-weekly charts)
+1. IREN Analysis: The red candle from April 8 remains valid on the daily chart. For the bottoming process to be considered comp
