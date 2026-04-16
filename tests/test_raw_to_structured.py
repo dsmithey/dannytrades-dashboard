@@ -667,3 +667,31 @@ class TestWriteWatchlistNext:
         write_watchlist_next(rows, str(out), "April 16, 2026")
         content = out.read_text()
         assert "April 16, 2026" in content
+
+
+# ---------------------------------------------------------------------------
+# Task 8: Golden File + Determinism Tests
+# ---------------------------------------------------------------------------
+
+class TestGoldenWatchlist:
+    def test_watchlist_golden_match(self):
+        """Re-reading and re-writing the baseline watchlist produces the golden file."""
+        rows = read_watchlist(str(FIXTURES / "watchlist_baseline.md"))
+        merged = merge_watchlist(rows, [])
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            tmp_path = f.name
+        write_watchlist_next(merged, tmp_path, "April 11, 2026")
+        golden = (Path(__file__).parent / "golden" / "WATCHLIST_AND_TIMELINE.expected.md").read_text()
+        actual = Path(tmp_path).read_text()
+        Path(tmp_path).unlink()
+        assert actual == golden, "Watchlist output does not match golden file"
+
+
+class TestDeterminism:
+    def test_parser_deterministic(self):
+        """Same input → identical output on two runs."""
+        raw = (FIXTURES / "multi_ticker.txt").read_text()
+        result1 = parse_raw_post(raw, post_id="154978919")
+        result2 = parse_raw_post(raw, post_id="154978919")
+        assert result1 == result2
