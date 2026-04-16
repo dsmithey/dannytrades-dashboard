@@ -4,9 +4,14 @@ NO LLM.  All extraction via regex + string operations.
 """
 from __future__ import annotations
 
+import argparse
+import difflib
 import hashlib
 import json
 import re
+import shutil
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 # ---------------------------------------------------------------------------
@@ -946,3 +951,341 @@ def build_parse_report(
         "post_ids_skipped_no_ticker": post_ids_skipped_no_ticker,
         "post_ids_from_manifest": post_ids_from_manifest,
     }
+
+
+# ---------------------------------------------------------------------------
+# Task 6: CLI helpers — find_existing_post_ids, _next_batch_number,
+#          run_approve, run_parse, main
+# ---------------------------------------------------------------------------
+
+_POST_ID_IN_MD_RE = re.compile(r"Post\s+(\d{6,})", re.IGNORECASE)
+_BATCH_FILE_RE = re.compile(r"batch(\d+)_structured", re.IGNORECASE)
+_RAW_STEM_ID_RE = re.compile(r"(\d{6,})")
+
+
+def find_existing_post_ids(structured_dir: str) -> set:
+    """Scan existing batch*_structured*.md files for 'Post XXXXXX' references."""
+    found: set = set()
+    p = Path(structured_dir)
+    for md_file in p.glob("batch*_structured*.md"):
+        text = md_file.read_text(encoding="utf-8", errors="replace")
+        for m in _POST_ID_IN_MD_RE.finditer(text):
+            found.add(m.group(1))
+    return found
+
+
+def _next_batch_number(structured_dir: str) -> int:
+    """Return the next sequential batch number based on existing batch files."""
+    p = Path(structured_dir)
+    max_num = 0
+    for md_file in p.glob("batch*_structured*.md"):
+        m = _BATCH_FILE_RE.search(md_file.stem)
+        if m:
+            n = int(m.group(1))
+            if n > max_num:
+                max_num = n
+    return max_num + 1
+
+
+def run_approve(report_path: str, structured_dir: str) -> int:
+    """
+    Approve mode: validate .next.md hash, backup current, promote .next.md.
+
+    Returns:
+        0 = promoted
+        1 = error
+        2 = no-op (nothing to do)
+    """
+    # Read parse report
+    try:
+        report = json.loads(Path(report_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[APPROVE] ERROR reading report: {exc}")
+        return 1
+
+    next_path_str = report.get("watchlist_next_path")
+    expected_hash = report.get("watchlist_next_sha256")
+
+    if not next_path_str:
+        print("[APPROVE] ERROR: report missing 'watchlist_next_path'")
+        return 1
+
+    next_path = Path(next_path_str)
+    if not next_path.exists():
+        print(f"[APPROVE] No-op: .next.md not found at {next_path}")
+        return 2
+
+    # Validate SHA-256
+    actual_hash = hashlib.sha256(next_path.read_bytes()).hexdigest()
+    if expected_hash and actual_hash != expected_hash:
+        print(
+            f"[APPROVE] ERROR: hash mismatch\n"
+            f"  expected: {expected_hash}\n"
+            f"  actual:   {actual_hash}"
+        )
+        return 1
+
+    # Determine canonical watchlist path (strip .next from name)
+    # e.g.  WATCHLIST_AND_TIMELINE.next.md  →  WATCHLIST_AND_TIMELINE.md
+    stem = next_path.name  # e.g. "WATCHLIST_AND_TIMELINE.next.md"
+    canonical_name = stem.replace(".next.md", ".md")
+    canonical_path = next_path.parent / canonical_name
+
+    # Backup current if it exists
+    if canonical_path.exists():
+        ts = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
+        backup_path = canonical_path.with_suffix(f".md.bak.{ts}")
+        shutil.copy2(str(canonical_path), str(backup_path))
+        print(f"[APPROVE] Backed up current → {backup_path}")
+
+    # Promote: rename .next.md → .md
+    next_path.rename(canonical_path)
+    print(f"[APPROVE] Promoted {next_path.name} → {canonical_path.name}")
+    return 0
+
+
+def run_parse(data_root: str, dry_run: bool = False) -> int:
+    """
+    Parse mode: find new raw .txt files, parse them, write batch + .next.md.
+
+    Returns:
+        0 = success
+        1 = gate failed
+        2 = no-op (no new posts)
+        3 = internal error
+    """
+    data_root_path = Path(data_root)
+    raw_dir = data_root_path / "data" / "raw"
+    structured_dir = data_root_path / "data" / "structured"
+    structured_dir.mkdir(parents=True, exist_ok=True)
+
+    _EXCLUDE_FILES = {"danny_posts_raw_dump.txt", "brief_print.pdf"}
+
+    # Collect .txt files, excluding known non-post files
+    raw_files = [
+        f for f in raw_dir.glob("*.txt")
+        if f.name not in _EXCLUDE_FILES
+    ]
+
+    # Build set of already-processed post IDs
+    existing_ids = find_existing_post_ids(str(structured_dir))
+
+    # Filter to new post IDs only — extract from filename stem
+    new_files = []
+    for f in sorted(raw_files):
+        m = _RAW_STEM_ID_RE.search(f.stem)
+        if m and m.group(1) not in existing_ids:
+            new_files.append((f, m.group(1)))
+        elif not m:
+            # No ID in filename — include anyway, use stem as ID
+            new_files.append((f, f.stem))
+
+    if not new_files:
+        print("[PARSE] No-op: no new post files to process.")
+        return 2
+
+    run_date = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+
+    # Parse each file
+    all_observations: list = []
+    titles: dict = {}
+    post_ids_processed: list = []
+    post_ids_skipped_no_ticker: list = []
+
+    for raw_path, post_id in new_files:
+        try:
+            raw_text = raw_path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            print(f"[PARSE] WARNING: cannot read {raw_path}: {exc}")
+            continue
+
+        # Handle YAML headers: files starting with --- have metadata
+        body = raw_text
+        if raw_text.startswith("---"):
+            parts = raw_text.split("---", 2)
+            if len(parts) >= 3:
+                body = parts[2].lstrip("\n")
+
+        result = parse_raw_post(body, post_id)
+
+        if result.get("skipped_reason") == "no_ticker_data":
+            post_ids_skipped_no_ticker.append(post_id)
+            continue
+
+        titles[post_id] = result.get("title", "")
+        for obs in result.get("observations", []):
+            obs["post_id"] = post_id
+            obs["date"] = result.get("date")
+            all_observations.append(obs)
+        post_ids_processed.append(post_id)
+
+    # Run review gate checks
+    nr_passed, nr_rate = check_needs_review_rate(all_observations)
+    field_errors = check_field_lengths(all_observations)
+    boilerplate_errors = check_boilerplate(all_observations)
+
+    gate_passed = nr_passed and not field_errors and not boilerplate_errors
+
+    print(f"[PARSE] New files found: {len(new_files)}")
+    print(f"[PARSE] Processed: {len(post_ids_processed)}  Skipped (no ticker): {len(post_ids_skipped_no_ticker)}")
+    print(f"[PARSE] Observations: {len(all_observations)}")
+    print(f"[PARSE] Needs-review rate: {nr_rate:.1%}  Gate: {'PASS' if nr_passed else 'FAIL'}")
+    if field_errors:
+        for e in field_errors:
+            print(f"[PARSE] FIELD ERROR: {e}")
+    if boilerplate_errors:
+        for e in boilerplate_errors:
+            print(f"[PARSE] BOILERPLATE ERROR: {e}")
+
+    if dry_run:
+        print("[PARSE] Dry-run: no files written.")
+        return 0 if gate_passed else 1
+
+    if not gate_passed:
+        print("[PARSE] Gate FAILED — aborting write.")
+        return 1
+
+    # Write batch file
+    batch_num = _next_batch_number(str(structured_dir))
+    batch_filename = f"batch{batch_num}_structured_{run_date}.md"
+    batch_path = structured_dir / batch_filename
+    write_batch_file(all_observations, titles, str(batch_path), run_date)
+    print(f"[PARSE] Wrote batch file: {batch_path}")
+
+    # Check cell lengths on batch file
+    batch_content = batch_path.read_text(encoding="utf-8")
+    cell_errors = check_cell_lengths(batch_content)
+    if cell_errors:
+        for e in cell_errors:
+            print(f"[PARSE] CELL LENGTH ERROR: {e}")
+
+    # Build watchlist .next.md
+    watchlist_path = structured_dir / "WATCHLIST_AND_TIMELINE.md"
+    next_path = structured_dir / "WATCHLIST_AND_TIMELINE.next.md"
+
+    existing_rows: list = []
+    if watchlist_path.exists():
+        try:
+            existing_rows = read_watchlist(str(watchlist_path))
+        except Exception as exc:
+            print(f"[PARSE] WARNING: could not read existing watchlist: {exc}")
+
+    merged_rows = merge_watchlist(existing_rows, all_observations)
+    write_watchlist_next(merged_rows, str(next_path), run_date)
+    print(f"[PARSE] Wrote watchlist next: {next_path}")
+
+    # Print diff between current watchlist and .next.md
+    if watchlist_path.exists():
+        current_lines = watchlist_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        next_lines = next_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        diff = list(difflib.unified_diff(
+            current_lines, next_lines,
+            fromfile="WATCHLIST_AND_TIMELINE.md",
+            tofile="WATCHLIST_AND_TIMELINE.next.md",
+            n=2,
+        ))
+        if diff:
+            print("[PARSE] Watchlist diff:")
+            for line in diff[:80]:  # cap diff output
+                print(line, end="")
+            if len(diff) > 80:
+                print(f"\n... ({len(diff) - 80} more lines)")
+        else:
+            print("[PARSE] Watchlist: no diff (unchanged).")
+    else:
+        print("[PARSE] No existing watchlist — .next.md is the first version.")
+
+    # Try to get prior run count from API (warn only on failure)
+    prior_run_count = 0
+    try:
+        import urllib.request
+        with urllib.request.urlopen(
+            "http://localhost:7777/api/v1/captain/dashboard/dannytrades",
+            timeout=3,
+        ) as resp:
+            api_data = json.loads(resp.read().decode())
+            prior_run_count = api_data.get("run_count", 0)
+    except Exception as exc:
+        print(f"[PARSE] WARNING: could not fetch prior run count from API: {exc}")
+
+    # Check manifest reconciliation if today's manifest exists
+    manifest_ids: list = []
+    manifest_glob = list((data_root_path / "data").glob(f"scrape_manifest_{run_date}*.json"))
+    if manifest_glob:
+        try:
+            manifest_data = json.loads(manifest_glob[0].read_text(encoding="utf-8"))
+            scraped_entries = manifest_data.get("scraped", [])
+            manifest_ids = [
+                str(e.get("post_id") or e) for e in scraped_entries
+            ]
+            print(f"[PARSE] Manifest found ({manifest_glob[0].name}): {len(manifest_ids)} entries")
+        except Exception as exc:
+            print(f"[PARSE] WARNING: could not read manifest: {exc}")
+
+    # Build and write parse report
+    existing_symbols = [r.get("symbol") for r in existing_rows if r.get("symbol")]
+    report = build_parse_report(
+        run_date=run_date,
+        raw_files_processed=len(post_ids_processed),
+        raw_files_skipped_no_ticker=len(post_ids_skipped_no_ticker),
+        batch_file=str(batch_path),
+        watchlist_next_path=str(next_path),
+        observations=all_observations,
+        prior_run_count=prior_run_count,
+        post_ids_processed=post_ids_processed,
+        post_ids_skipped_no_ticker=post_ids_skipped_no_ticker,
+        post_ids_from_manifest=manifest_ids,
+        existing_symbols=existing_symbols,
+    )
+
+    reports_dir = data_root_path / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    report_path = reports_dir / f"parse_report_{run_date}.json"
+    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    print(f"[PARSE] Parse report written: {report_path}")
+
+    return 0
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="DannyTrades raw-to-structured pipeline CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--approve",
+        action="store_true",
+        help="Approve mode: validate and promote WATCHLIST_AND_TIMELINE.next.md",
+    )
+    parser.add_argument(
+        "--report",
+        metavar="PATH",
+        help="Path to parse_report JSON (required with --approve)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Parse mode: print report to stdout, write nothing",
+    )
+    parser.add_argument(
+        "--data-root",
+        metavar="PATH",
+        default="/home/david/DannyTrades",
+        help="Root directory containing data/ and reports/ (default: /home/david/DannyTrades)",
+    )
+
+    args = parser.parse_args()
+
+    if args.approve:
+        if not args.report:
+            parser.error("--report PATH is required with --approve")
+        structured_dir = str(Path(args.data_root) / "data" / "structured")
+        exit_code = run_approve(args.report, structured_dir)
+        raise SystemExit(exit_code)
+    else:
+        exit_code = run_parse(args.data_root, dry_run=args.dry_run)
+        raise SystemExit(exit_code)
+
+
+if __name__ == "__main__":
+    main()
