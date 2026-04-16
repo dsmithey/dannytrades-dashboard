@@ -695,3 +695,66 @@ class TestDeterminism:
         result1 = parse_raw_post(raw, post_id="154978919")
         result2 = parse_raw_post(raw, post_id="154978919")
         assert result1 == result2
+
+
+# ---------------------------------------------------------------------------
+# Task 9: End-to-End Integration Test
+# ---------------------------------------------------------------------------
+
+import json
+import shutil
+
+
+class TestEndToEnd:
+    def test_full_parse_pipeline(self, tmp_path):
+        """Full pipeline: raw files → batch + watchlist + report."""
+        # Set up a mini data tree
+        raw_dir = tmp_path / "data" / "raw"
+        structured_dir = tmp_path / "data" / "structured"
+        raw_dir.mkdir(parents=True)
+        structured_dir.mkdir(parents=True)
+
+        # Copy test fixtures as raw files
+        shutil.copy(FIXTURES / "multi_ticker.txt", raw_dir / "154978919.txt")
+        shutil.copy(FIXTURES / "single_ticker.txt", raw_dir / "post_155338136.txt")
+        shutil.copy(FIXTURES / "no_ticker.txt", raw_dir / "154703740.txt")
+
+        # Copy baseline watchlist
+        shutil.copy(FIXTURES / "watchlist_baseline.md",
+                     structured_dir / "WATCHLIST_AND_TIMELINE.md")
+
+        # Run parse
+        from raw_to_structured import run_parse
+        exit_code = run_parse(str(tmp_path))
+
+        assert exit_code == 0, f"Parse failed with exit code {exit_code}"
+
+        # Verify outputs exist
+        batch_files = list(structured_dir.glob("batch*_structured*.md"))
+        assert len(batch_files) >= 1, f"Expected batch file, got {len(batch_files)}"
+
+        next_file = structured_dir / "WATCHLIST_AND_TIMELINE.next.md"
+        assert next_file.exists(), ".next.md not created"
+
+        # Report is written to {data_root}/reports/
+        reports_dir = tmp_path / "reports"
+        report_files = list(reports_dir.glob("parse_report_*.json"))
+        assert len(report_files) == 1, f"Expected 1 report, got {len(report_files)}"
+
+        # Verify report content
+        report = json.loads(report_files[0].read_text())
+        assert report["observations_count"] > 0
+        assert report["needs_review_rate"] < 0.50
+        assert report["watchlist_next_sha256"] is not None
+
+        # Verify no boilerplate in batch file
+        batch_content = batch_files[0].read_text()
+        for phrase in ["Get more out of every post", "Related posts", "Join now"]:
+            assert phrase not in batch_content, f"Boilerplate '{phrase}' in batch file"
+
+        # Verify no cell > 500 chars
+        for line in batch_content.split("\n"):
+            if line.startswith("|") and "---" not in line:
+                cells = [c.strip() for c in line.split("|")[1:-1]]
+                for cell in cells:
+                    assert len(cell) <= 500, f"Cell too long: {len(cell)}"
