@@ -18,6 +18,8 @@ from raw_to_structured import (
     split_ticker_blocks,
     extract_ticker_fields,
     parse_raw_post,
+    format_batch_entry,
+    write_batch_file,
     BOILERPLATE_PHRASES,
     FIELD_LIMITS,
     MAX_CELL_LENGTH,
@@ -454,3 +456,91 @@ class TestConstants:
 
     def test_max_cell_length_defined(self):
         assert MAX_CELL_LENGTH == 500
+
+
+# ---------------------------------------------------------------------------
+# Task 3: Batch Structured Markdown Writer
+# ---------------------------------------------------------------------------
+
+_SAMPLE_OBS = {
+    "symbol": "AAOI",
+    "date": "2026-04-07",
+    "post_id": "154978919",
+    "closing_price": 107.45,
+    "support": "$83, $94, $102, $105",
+    "resistance": "$115, $129",
+    "whale_pct": 87.08,
+    "whale_direction": "increased",
+    "macd_rsi": "MACD and RSI are flattening",
+    "red_daily": True,
+    "red_weekly": False,
+    "red_monthly": False,
+    "yellow_daily": False,
+    "yellow_weekly": False,
+    "golden_cross": False,
+    "invalidation": "$105.1",
+    "needs_review": False,
+}
+
+_SAMPLE_TITLE = "TIER 3 title here"
+
+
+class TestFormatBatchEntry:
+
+    def test_single_observation_format(self):
+        """Output must contain the section header and the table row."""
+        md = format_batch_entry(_SAMPLE_OBS, _SAMPLE_TITLE)
+        assert "## 2026-04-07" in md
+        assert "$AAOI" in md
+        assert "154978919" in md
+        assert "$107.45" in md
+        assert "87.08%" in md
+
+    def test_table_header_columns(self):
+        """Exactly 7 columns: Ticker, Close, Support, Resistance, Whale Accum, MACD/RSI, Signal."""
+        md = format_batch_entry(_SAMPLE_OBS, _SAMPLE_TITLE)
+        assert "| Ticker | Close | Support | Resistance | Whale Accum | MACD/RSI | Signal |" in md
+
+    def test_no_cell_exceeds_500_chars(self):
+        """No table cell in the output should exceed 500 chars."""
+        obs = dict(_SAMPLE_OBS)
+        obs["macd_rsi"] = "X" * 600
+        obs["support"] = "Y" * 600
+        md = format_batch_entry(obs, _SAMPLE_TITLE)
+        for line in md.split("\n"):
+            if not line.startswith("|"):
+                continue
+            cells = line.split("|")[1:-1]
+            for cell in cells:
+                assert len(cell.strip()) <= MAX_CELL_LENGTH
+
+    def test_signal_summary_max_120_chars(self):
+        """The Signal Summary line must be ≤ 120 chars of signal text."""
+        obs = dict(_SAMPLE_OBS)
+        obs["signal"] = "A" * 200
+        md = format_batch_entry(obs, _SAMPLE_TITLE)
+        for line in md.split("\n"):
+            if line.startswith("**Signal Summary:**"):
+                summary_text = line[len("**Signal Summary:** "):]
+                assert len(summary_text) <= 120
+
+
+class TestWriteBatchFile:
+
+    def test_writes_file(self, tmp_path):
+        out = tmp_path / "batch.md"
+        result = write_batch_file(
+            [_SAMPLE_OBS],
+            {"154978919": "TIER 3 title"},
+            str(out),
+            "2026-04-07",
+        )
+        assert result == str(out)
+        assert out.exists()
+
+    def test_file_contains_header(self, tmp_path):
+        out = tmp_path / "batch.md"
+        write_batch_file([_SAMPLE_OBS], {}, str(out), "2026-04-07")
+        content = out.read_text()
+        assert "2026-04-07" in content
+        assert "AAOI" in content
