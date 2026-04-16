@@ -20,6 +20,9 @@ from raw_to_structured import (
     parse_raw_post,
     format_batch_entry,
     write_batch_file,
+    read_watchlist,
+    merge_watchlist,
+    write_watchlist_next,
     BOILERPLATE_PHRASES,
     FIELD_LIMITS,
     MAX_CELL_LENGTH,
@@ -544,3 +547,123 @@ class TestWriteBatchFile:
         content = out.read_text()
         assert "2026-04-07" in content
         assert "AAOI" in content
+
+
+# ---------------------------------------------------------------------------
+# Task 4: Watchlist Reader / Writer / Merge
+# ---------------------------------------------------------------------------
+
+WATCHLIST_FIXTURE = FIXTURES / "watchlist_baseline.md"
+
+
+class TestReadWatchlist:
+
+    def test_reads_existing_watchlist(self):
+        """Should return > 40 rows and SNDK should be first at 98.98%."""
+        rows = read_watchlist(str(WATCHLIST_FIXTURE))
+        assert len(rows) > 40
+        first = rows[0]
+        assert first["symbol"] == "SNDK"
+        assert first["whale_pct"] == pytest.approx(98.98)
+
+    def test_parses_all_columns(self):
+        """Every row must have all required keys with non-None values for SNDK."""
+        rows = read_watchlist(str(WATCHLIST_FIXTURE))
+        sndk = next(r for r in rows if r["symbol"] == "SNDK")
+        assert sndk["rank"] == 1
+        assert sndk["sector"] == "Semiconductor/Storage"
+        assert sndk["latest_close"] == pytest.approx(851.57)
+        assert sndk["whale_pct"] == pytest.approx(98.98)
+        assert sndk["macd_rsi"] is not None
+        assert sndk["signal"] is not None
+        assert sndk["trend"] is not None
+
+    def test_parses_wkly_annotation(self):
+        """'98.9% (wkly)' should parse to 98.9 (annotation stripped)."""
+        rows = read_watchlist(str(WATCHLIST_FIXTURE))
+        wulf = next(r for r in rows if r["symbol"] == "WULF")
+        assert wulf["whale_pct"] == pytest.approx(98.9)
+
+    def test_parses_invisible(self):
+        """'Invisible' whale accum should parse to 0.0."""
+        rows = read_watchlist(str(WATCHLIST_FIXTURE))
+        shop = next(r for r in rows if r["symbol"] == "SHOP")
+        assert shop["whale_pct"] == pytest.approx(0.0)
+
+
+class TestMergeWatchlist:
+
+    def _base(self):
+        return [
+            {"rank": 1, "symbol": "AAOI", "sector": "Photonics", "latest_close": 107.45,
+             "whale_pct": 87.08, "macd_rsi": "Flattening", "signal": "Red candle",
+             "trend": "Rising", "date": "2026-04-07"},
+            {"rank": 2, "symbol": "PLTR", "sector": "AI/Software", "latest_close": 128.06,
+             "whale_pct": 58.25, "macd_rsi": "Curling down", "signal": "Yellow candle",
+             "trend": "Falling", "date": "2026-04-11"},
+        ]
+
+    def test_new_symbol_appended(self):
+        existing = self._base()
+        new_obs = [{"symbol": "NVDA", "closing_price": 200.0, "whale_pct": 90.0,
+                    "macd_rsi": "Curling up", "date": "2026-04-12"}]
+        result = merge_watchlist(existing, new_obs)
+        symbols = [r["symbol"] for r in result]
+        assert "NVDA" in symbols
+
+    def test_existing_symbol_updated(self):
+        existing = self._base()
+        new_obs = [{"symbol": "AAOI", "closing_price": 133.30, "whale_pct": 95.9,
+                    "macd_rsi": "Curling up", "date": "2026-04-11"}]
+        result = merge_watchlist(existing, new_obs)
+        aaoi = next(r for r in result if r["symbol"] == "AAOI")
+        assert aaoi["latest_close"] == pytest.approx(133.30)
+        assert aaoi["whale_pct"] == pytest.approx(95.9)
+
+    def test_existing_symbol_preserves_sector(self):
+        """When new obs has no sector, existing sector is preserved."""
+        existing = self._base()
+        new_obs = [{"symbol": "AAOI", "closing_price": 133.30, "whale_pct": 95.9,
+                    "macd_rsi": "Curling up", "date": "2026-04-11"}]
+        result = merge_watchlist(existing, new_obs)
+        aaoi = next(r for r in result if r["symbol"] == "AAOI")
+        assert aaoi["sector"] == "Photonics"
+
+    def test_uncovered_symbols_preserved(self):
+        """Symbols in existing not touched by new_obs must remain in output."""
+        existing = self._base()
+        new_obs = [{"symbol": "NVDA", "closing_price": 200.0, "whale_pct": 90.0,
+                    "macd_rsi": "Curling up", "date": "2026-04-12"}]
+        result = merge_watchlist(existing, new_obs)
+        symbols = [r["symbol"] for r in result]
+        assert "AAOI" in symbols
+        assert "PLTR" in symbols
+
+    def test_sorted_by_whale_pct_descending(self):
+        existing = self._base()
+        new_obs = [{"symbol": "NVDA", "closing_price": 200.0, "whale_pct": 99.0,
+                    "macd_rsi": "Curling up", "date": "2026-04-12"}]
+        result = merge_watchlist(existing, new_obs)
+        pcts = [r["whale_pct"] for r in result if r.get("whale_pct") is not None]
+        assert pcts == sorted(pcts, reverse=True)
+
+
+class TestWriteWatchlistNext:
+
+    def test_writes_valid_markdown(self, tmp_path):
+        rows = read_watchlist(str(WATCHLIST_FIXTURE))
+        out = tmp_path / "WATCHLIST_AND_TIMELINE.next.md"
+        result = write_watchlist_next(rows, str(out), "April 16, 2026")
+        assert result == str(out)
+        content = out.read_text()
+        # Must have the standard header row
+        assert "| Rank | Ticker | Sector | Latest Close | Whale Accum | MACD/RSI | Latest Signal | Trend (5-day) |" in content
+        # Must contain at least SNDK
+        assert "SNDK" in content
+
+    def test_writes_generated_date(self, tmp_path):
+        rows = read_watchlist(str(WATCHLIST_FIXTURE))
+        out = tmp_path / "watchlist_next.md"
+        write_watchlist_next(rows, str(out), "April 16, 2026")
+        content = out.read_text()
+        assert "April 16, 2026" in content
