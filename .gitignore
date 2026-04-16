@@ -1,0 +1,11 @@
+# Paid content — raw Patreon post dumps
+data/raw/*.txt
+data/raw/*.pdf
+
+# Transient parser artifacts
+data/structured/WATCHLIST_AND_TIMELINE.next.md
+data/structured/WATCHLIST_AND_TIMELINE.md.bak.*
+
+# Python
+__pycache__/
+*.pyc
