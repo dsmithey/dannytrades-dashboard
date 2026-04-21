@@ -65,9 +65,9 @@ _BLOCK_HEADER_RE = re.compile(
 )
 
 # Field regexes for extract_ticker_fields
-_PRICE_RE = re.compile(r"Closing Price\s*:\s*\$([0-9]+(?:\.[0-9]+)?)", re.IGNORECASE)
-_SUPPORT_RE = re.compile(r"Support (?:Levels?|Level)\s*:\s*(.+)", re.IGNORECASE)
-_RESISTANCE_RE = re.compile(r"Resistance (?:Levels?|Level)\s*:\s*(.+)", re.IGNORECASE)
+_PRICE_RE = re.compile(r"(?:Closing Price|Close[d]?\s+at)\s*:?\s*\$([0-9]+(?:\.[0-9]+)?)", re.IGNORECASE)
+_SUPPORT_RE = re.compile(r"Support\s*(?:Levels?|Level)?\s*:\s*(.+)", re.IGNORECASE)
+_RESISTANCE_RE = re.compile(r"Resistance\s*(?:Levels?|Level)?\s*:\s*(.+)", re.IGNORECASE)
 
 # Whale accumulation:
 # "increased to 87.08%"  /  "decreased to 58.25% (weekly chart)"  /  "remained steady at 96.5%"
