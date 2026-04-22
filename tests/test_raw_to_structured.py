@@ -442,6 +442,51 @@ class TestParseRawPost:
 
 
 # ---------------------------------------------------------------------------
+# TestSymbolValidation — upstream closure for
+# BUG-T89-DANNYTRADES-PARSER-GARBAGE-TICKERS-001
+# ---------------------------------------------------------------------------
+
+class TestSymbolValidation:
+    """Real posts must emit only US-equity-shaped symbols; invalid blocks get
+    appended to skipped_blocks with a reason instead of polluting observations.
+    """
+
+    def test_valid_symbols_all_uppercase_alpha(self):
+        """Every emitted symbol matches US-equity shape."""
+        import re
+        valid = re.compile(r"^[A-Z]{1,5}(\.[A-Z]{1,2})?$")
+        result = parse_raw_post(MULTI_RAW, post_id="154978919")
+        for obs in result["observations"]:
+            assert valid.match(obs["symbol"]), f"emitted invalid symbol: {obs['symbol']!r}"
+
+    def test_skipped_blocks_key_always_present(self):
+        """parse_raw_post always returns skipped_blocks (may be empty)."""
+        result = parse_raw_post(MULTI_RAW, post_id="154978919")
+        assert "skipped_blocks" in result
+        assert isinstance(result["skipped_blocks"], list)
+
+    def test_no_unknown_symbol_leaks(self):
+        """Regression: 'UNKNOWN' fallback is gone — block with unresolved
+        ticker gets skipped, not written as a UNKNOWN-symbol observation."""
+        result = parse_raw_post(MULTI_RAW, post_id="154978919")
+        symbols = {o["symbol"] for o in result["observations"]}
+        assert "UNKNOWN" not in symbols
+
+    def test_known_garbage_strings_cannot_pass(self):
+        """The 3 strings found in PG (BUG-T89-DANNYTRADES-PARSER-GARBAGE-
+        TICKERS-001) must be rejected at the symbol validator."""
+        from raw_to_structured import _VALID_SYMBOL_RE
+        for bad in ("UNKNOWN", "N/A (VIEWI", "SPX (S&P 5", "", "  ", "lowercase"):
+            assert not _VALID_SYMBOL_RE.match(bad), f"{bad!r} should have been rejected"
+
+    def test_valid_shapes_accepted(self):
+        """Common real US ticker shapes pass the validator."""
+        from raw_to_structured import _VALID_SYMBOL_RE
+        for good in ("A", "AA", "AAPL", "GOOGL", "BRK.A", "BF.B"):
+            assert _VALID_SYMBOL_RE.match(good), f"{good!r} should have been accepted"
+
+
+# ---------------------------------------------------------------------------
 # Constants smoke tests
 # ---------------------------------------------------------------------------
 

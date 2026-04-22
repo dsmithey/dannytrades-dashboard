@@ -53,6 +53,20 @@ _DATE_RE = re.compile(
 # Regex: "$TICKER" — captures tickers from title
 _TICKER_TITLE_RE = re.compile(r"\$([A-Z]{1,6})")
 
+# US equity symbol shape (last line of defense at the parser boundary).
+# Accepts e.g. AMD, GOOGL, BRK.A, BF.B; rejects "UNKNOWN", "N/A (VIEWI",
+# "SPX (S&P 5", "" and anything with spaces/parens/slashes/ampersands.
+#
+# History: legacy imports wrote 3 garbage rows into
+# dannytrades_ticker_observations (N/A (VIEWI / SPX (S&P 5 / UNKNOWN). Those
+# strings silently broke the Unusual Whales screener batch URL because the
+# ampersand in "S&P" was truncating the query string on the server side —
+# filed as BUG-T89-DANNYTRADES-UW-SCREENER-TICKER-TRUNCATION-001 and patched
+# client-side in the MOS repo. This upstream filter closes the parent bug
+# (BUG-T89-DANNYTRADES-PARSER-GARBAGE-TICKERS-001) by preventing new garbage
+# from ever reaching PG.
+_VALID_SYMBOL_RE = re.compile(r"^[A-Z]{1,5}(?:\.[A-Z]{1,2})?$")
+
 # Regex: tier number
 _TIER_RE = re.compile(r"\bTIER\s+(\d+)\b", re.IGNORECASE)
 
@@ -418,20 +432,32 @@ def parse_raw_post(raw: str, post_id: str) -> dict:
     ticker_list = meta["tickers"]  # from title
 
     observations = []
+    skipped_blocks: list[dict] = []
     for idx, block in enumerate(blocks):
         fields = extract_ticker_fields(block["text"])
 
         # Resolve symbol: prefer ticker_hint, fall back to title ticker list
-        symbol = block["ticker_hint"]
-        if symbol is None and idx < len(ticker_list):
-            symbol = ticker_list[idx]
-        if symbol is None:
-            symbol = "UNKNOWN"
+        raw_symbol = block["ticker_hint"]
+        if raw_symbol is None and idx < len(ticker_list):
+            raw_symbol = ticker_list[idx]
 
-        # Enforce FIELD_LIMITS["symbol"]
-        symbol = symbol[: FIELD_LIMITS["symbol"]]
+        # Validate symbol shape; drop blocks that don't resolve to a
+        # US-equity-shaped ticker rather than writing garbage into PG.
+        clean_symbol = None
+        if raw_symbol is not None:
+            candidate = raw_symbol.strip().upper()
+            if _VALID_SYMBOL_RE.match(candidate):
+                clean_symbol = candidate
 
-        obs = {"symbol": symbol}
+        if clean_symbol is None:
+            skipped_blocks.append({
+                "block_idx": idx,
+                "raw_symbol": raw_symbol,
+                "reason": "unresolved_ticker" if raw_symbol is None else "invalid_symbol",
+            })
+            continue
+
+        obs = {"symbol": clean_symbol}
         obs.update(fields)
         observations.append(obs)
 
@@ -441,6 +467,7 @@ def parse_raw_post(raw: str, post_id: str) -> dict:
         "date": meta["date"],
         "observations": observations,
         "skipped_reason": None,
+        "skipped_blocks": skipped_blocks,
     }
 
 
