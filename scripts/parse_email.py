@@ -101,9 +101,12 @@ def clean_email_body(raw: str) -> tuple[str, str]:
     # Remove [image: ...] tags
     body = re.sub(r"\[image:\s*\w+\]", "", body)
 
-    # Remove email boilerplate
+    # Remove email boilerplate — line-scoped. DO NOT use DOTALL here: every
+    # pattern is a single-line match, and DOTALL made "View in app.*" eat
+    # the entire analysis body (the whole payload lives between the header
+    # line "View in app" and the "Did you like this post?" footer).
     for pattern in _EMAIL_BOILERPLATE:
-        body = re.sub(pattern, "", body, flags=re.DOTALL | re.IGNORECASE)
+        body = re.sub(pattern, "", body, flags=re.IGNORECASE)
 
     # Remove Dr Cat video insight sections (keep the stock analysis)
     body = re.sub(
@@ -121,8 +124,18 @@ def clean_email_body(raw: str) -> tuple[str, str]:
     return title.strip(), body.strip()
 
 
-def parse_email(raw_text: str) -> dict:
+def parse_email(raw_text: str, subject: Optional[str] = None) -> dict:
     """Parse a DannyTrades email body into structured data.
+
+    Args:
+        raw_text: Email body as plaintext. For forwarded emails this includes
+            the "---- Forwarded message ----" block with a Subject: line that
+            clean_email_body() extracts. For native Patreon emails (straight
+            from dannytrades@creator.patreon.com), the body has no inline
+            Subject line — pass the subject explicitly via the `subject` kwarg.
+        subject: Optional email Subject header override. When provided, skips
+            in-body Subject extraction and uses this instead. The
+            scrape_julie_gmail_patreon.py IMAP scraper uses this path.
 
     Returns:
         {
@@ -143,13 +156,32 @@ def parse_email(raw_text: str) -> dict:
             "raw_cleaned": "",
         }
 
-    title, body = clean_email_body(raw_text)
+    body_title, body = clean_email_body(raw_text)
+    # Explicit subject argument wins over in-body Subject: extraction.
+    title = subject if subject is not None else body_title
 
     # Extract metadata from title
     metadata = extract_post_metadata(title) if title else {}
 
-    # Check if this is an editorial (no numbered stock analysis blocks)
+    # Multi-ticker posts use numbered "1. TICKER Analysis:" blocks.
+    # Single-ticker native emails use "TICKER Analysis:" without a number.
     blocks = list(_BLOCK_HEADER_RE.finditer(body))
+    if not blocks and metadata.get("tickers"):
+        # Native single-ticker path: one observation, fields extracted from
+        # the whole body using the ticker from the subject.
+        single_fields = extract_ticker_fields(body)
+        if any(v is not None for v in single_fields.values()):
+            symbol = metadata["tickers"][0].upper()
+            obs = {"symbol": symbol}
+            obs.update(single_fields)
+            return {
+                "post_type": "analysis",
+                "title": title,
+                "metadata": metadata,
+                "observations": [obs],
+                "raw_cleaned": body,
+            }
+
     if not blocks:
         return {
             "post_type": "editorial",
